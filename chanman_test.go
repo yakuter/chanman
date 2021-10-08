@@ -19,10 +19,12 @@ func TestChanman(t *testing.T) {
 	go chanmanQueue.Listen(callbackFn)
 
 	chanmanQueue.Add("Test Data 1")
-	// chanmanQueue.Add("Test Data 2")
+	chanmanQueue.Add("Test Data 2")
 	quitCh <- struct{}{}
-	// chanmanQueue.Add("Test Data 3")
-	// chanmanQueue.Add("Test Data 4")
-	// chanmanQueue.Add("Test Data 5")
+	chanmanQueue.Add("Test Data 3")
+	chanmanQueue.Add("Test Data 4")
+	chanmanQueue.Add("Test Data 5")
+
 	<-quitCh
+	t.Logf("TestChanman done")
 }

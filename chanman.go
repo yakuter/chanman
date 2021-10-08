@@ -1,6 +1,7 @@
 package chanman
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -15,7 +16,7 @@ type Chanman struct {
 	mu      sync.Mutex
 }
 
-// NewChanman creates a new Chanman instance
+// New creates a new Chanman instance
 func New(quitCh chan struct{}, limit int) *Chanman {
 	return &Chanman{
 		quitCh:  quitCh,
@@ -26,13 +27,12 @@ func New(quitCh chan struct{}, limit int) *Chanman {
 
 // Listen starts listening for queue items
 func (cm *Chanman) Listen(callbackFn func(interface{})) {
-	defer closeQueueCh(cm.queueCh)
-
 	for {
 		select {
 		case <-cm.quitCh:
-			logger.Info("Quit signal received. Stopped listening.")
-			close(cm.quitCh)
+			// logger.Info("Quit signal received. Stopped listening.")
+			cm.quit()
+			fmt.Println("Quit signal received. Stopped listening.")
 			return
 		case data, ok := <-cm.queueCh:
 			if ok {
@@ -50,12 +50,13 @@ func (cm *Chanman) Add(data interface{}) {
 
 	if isQueueChClosed(cm.queueCh) {
 		logger.Errorf("Failed to add item to queue. Channel is already closed.")
+		cm.quit()
 		return
 	}
 
-	if cm.IsLimitExceeded() {
+	if cm.isLimitExceeded() {
 		logger.Errorf("Failed to add %q. Queue limit (%d) exceeded", data, cm.limit)
-		closeQueueCh(cm.queueCh)
+		cm.quit()
 		return
 	}
 
@@ -63,23 +64,46 @@ func (cm *Chanman) Add(data interface{}) {
 	cm.queueCh <- data
 }
 
-// IsLimitExceeded returns true if the channel limit has been reached
-func (cm *Chanman) IsLimitExceeded() bool {
+// isLimitExceeded returns true if the channel limit has been reached
+func (cm *Chanman) isLimitExceeded() bool {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 
 	return cm.count > cm.limit
 }
 
-// CloseCh closes a channel gracefully
-func closeQueueCh(c chan interface{}) {
-	if !isQueueChClosed(c) {
-		close(c)
+// isLimitExceeded returns true if the channel limit has been reached
+func (cm *Chanman) quit() {
+	cm.closeQuitCh()
+	cm.closeQueueCh()
+}
+
+// closeQueueCh closes a channel gracefully
+func (cm *Chanman) closeQueueCh() {
+	if !isQueueChClosed(cm.queueCh) {
+		close(cm.queueCh)
 	}
 }
 
-// IsChClosed returns true if a channel is already closed
+// closeQuitCh closes a channel gracefully
+func (cm *Chanman) closeQuitCh() {
+	if !isQuitChClosed(cm.quitCh) {
+		close(cm.quitCh)
+	}
+}
+
+// isQueueChClosed returns true if a channel is already closed
 func isQueueChClosed(c chan interface{}) bool {
+	select {
+	case <-c:
+		return true
+	default:
+	}
+	return false
+}
+
+// isQueueChClosed returns true if a channel is already closed
+func isQuitChClosed(c chan struct{}) bool {
 	select {
 	case <-c:
 		return true

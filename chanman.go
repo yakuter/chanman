@@ -43,7 +43,7 @@ func (cm *Chanman) Listen() {
 
 	var wg sync.WaitGroup
 	for i := 0; i < cm.opts.Worker; i++ {
-		go worker(cm.opts.CallbackFn, jobs, &wg, cm.ctx)
+		go worker(cm.ctx, jobs, &wg, cm.opts.CallbackFn)
 		wg.Add(1)
 	}
 
@@ -64,7 +64,7 @@ Loop:
 }
 
 // worker spawns simple runtime for concurrent worker pool
-func worker(callbackFn func(interface{}) error, jobs <-chan interface{}, wg *sync.WaitGroup, ctx context.Context) {
+func worker(ctx context.Context, jobs <-chan interface{}, wg *sync.WaitGroup, callbackFn func(interface{}) error) {
 Loop:
 	for {
 		select {

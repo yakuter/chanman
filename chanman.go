@@ -1,42 +1,52 @@
 package chanman
 
 import (
-	"fmt"
+	"context"
 	"sync"
 )
 
 var logger Logger = NewBuiltinLogger()
 
 // Chanman is a channel queue manager
+type Options struct {
+	// Limit is the maximum number of items to be queued
+	Limit int
+	// CallbackFn is the function to call when an item is added to the queue
+	CallbackFn func(interface{}) error
+}
+
+// Chanman is a channel queue manager
 type Chanman struct {
-	quitCh  chan struct{}
+	ctx     context.Context
+	opts    *Options
 	queueCh chan interface{}
 	count   int
-	limit   int
 	mu      sync.Mutex
 }
 
 // New creates a new Chanman instance
-func New(quitCh chan struct{}, limit int) *Chanman {
+func New(ctx context.Context, options *Options) *Chanman {
 	return &Chanman{
-		quitCh:  quitCh,
+		ctx:     ctx,
+		opts:    options,
 		queueCh: make(chan interface{}),
-		limit:   limit,
 	}
 }
 
 // Listen starts listening for queue items
-func (cm *Chanman) Listen(callbackFn func(interface{})) {
+func (cm *Chanman) Listen() {
+	defer cm.Quit()
+
+Loop:
 	for {
 		select {
-		case <-cm.quitCh:
-			// logger.Info("Quit signal received. Stopped listening.")
-			cm.quit()
-			fmt.Println("Quit signal received. Stopped listening.")
-			return
+		case <-cm.ctx.Done():
+			break Loop
 		case data, ok := <-cm.queueCh:
 			if ok {
-				callbackFn(data)
+				cm.opts.CallbackFn(data)
+			} else {
+				break Loop
 			}
 		}
 	}
@@ -48,62 +58,42 @@ func (cm *Chanman) Add(data interface{}) {
 	cm.count += 1
 	cm.mu.Unlock()
 
-	if isQueueChClosed(cm.queueCh) {
-		logger.Errorf("Failed to add item to queue. Channel is already closed.")
-		cm.quit()
+	if isChClosed(cm.queueCh) {
+		logger.Errorf("Failed to add item %q to queue. Channel is already closed.", data)
 		return
 	}
 
 	if cm.isLimitExceeded() {
-		logger.Errorf("Failed to add %q. Queue limit (%d) exceeded", data, cm.limit)
-		cm.quit()
+		logger.Errorf("Failed to add %q. Queue limit (%d) exceeded", data, cm.opts.Limit)
 		return
 	}
 
-	// It is safe to add item to queue
+	// Now it is safe to add item to queue
 	cm.queueCh <- data
+}
+
+// quit closes the queue and quit channels
+func (cm *Chanman) Quit() {
+	logger.Infof("Closing queue and quit channels")
+	cm.closeCh()
 }
 
 // isLimitExceeded returns true if the channel limit has been reached
 func (cm *Chanman) isLimitExceeded() bool {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
-
-	return cm.count > cm.limit
+	return cm.count > cm.opts.Limit
 }
 
-// isLimitExceeded returns true if the channel limit has been reached
-func (cm *Chanman) quit() {
-	cm.closeQuitCh()
-	cm.closeQueueCh()
-}
-
-// closeQueueCh closes a channel gracefully
-func (cm *Chanman) closeQueueCh() {
-	if !isQueueChClosed(cm.queueCh) {
+// closeCh closes  channel gracefully
+func (cm *Chanman) closeCh() {
+	if !isChClosed(cm.queueCh) {
 		close(cm.queueCh)
 	}
 }
 
-// closeQuitCh closes a channel gracefully
-func (cm *Chanman) closeQuitCh() {
-	if !isQuitChClosed(cm.quitCh) {
-		close(cm.quitCh)
-	}
-}
-
-// isQueueChClosed returns true if a channel is already closed
-func isQueueChClosed(c chan interface{}) bool {
-	select {
-	case <-c:
-		return true
-	default:
-	}
-	return false
-}
-
-// isQueueChClosed returns true if a channel is already closed
-func isQuitChClosed(c chan struct{}) bool {
+// isChClosed returns true if a channel is already closed
+func isChClosed(c chan interface{}) bool {
 	select {
 	case <-c:
 		return true

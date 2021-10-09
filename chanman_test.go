@@ -1,30 +1,37 @@
 package chanman_test
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/yakuter/chanman"
 )
 
 func TestChanman(t *testing.T) {
-	t.Log("TestChanman")
-
-	quitCh := make(chan struct{})
-	chanmanQueue := chanman.New(quitCh, 4)
-
-	callbackFn := func(data interface{}) {
-		t.Logf("Received data: %v", data)
+	callbackFn := func(data interface{}) error {
+		t.Logf("Processed data: %v", data)
+		return nil
 	}
 
-	go chanmanQueue.Listen(callbackFn)
+	opts := &chanman.Options{
+		CallbackFn: callbackFn,
+		Limit:      19,
+	}
 
-	chanmanQueue.Add("Test Data 1")
-	chanmanQueue.Add("Test Data 2")
-	quitCh <- struct{}{}
-	chanmanQueue.Add("Test Data 3")
-	chanmanQueue.Add("Test Data 4")
-	chanmanQueue.Add("Test Data 5")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	<-quitCh
+	queue := chanman.New(ctx, opts)
+
+	go queue.Listen()
+
+	for i := 0; i <= 20; i++ {
+		queue.Add(fmt.Sprintf("job-%d", i))
+		if i == 10 {
+			queue.Quit()
+		}
+	}
+
 	t.Logf("TestChanman done")
 }

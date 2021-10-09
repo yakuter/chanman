@@ -17,6 +17,7 @@ func TestChanman(t *testing.T) {
 	opts := &chanman.Options{
 		CallbackFn: callbackFn,
 		Limit:      19,
+		Worker:     5,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

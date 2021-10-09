@@ -13,6 +13,8 @@ type Options struct {
 	Limit int
 	// CallbackFn is the function to call when an item is added to the queue
 	CallbackFn func(interface{}) error
+	// Worker represent how much worker will execute job
+	Worker int
 }
 
 // Chanman is a channel queue manager
@@ -37,6 +39,14 @@ func New(ctx context.Context, options *Options) *Chanman {
 func (cm *Chanman) Listen() {
 	defer cm.Quit()
 
+	jobs := make(chan interface{})
+
+	var wg sync.WaitGroup
+	for i := 0; i < cm.opts.Worker; i++ {
+		go worker(cm.ctx, jobs, &wg, cm.opts.CallbackFn)
+		wg.Add(1)
+	}
+
 Loop:
 	for {
 		select {
@@ -44,12 +54,31 @@ Loop:
 			break Loop
 		case data, ok := <-cm.queueCh:
 			if ok {
-				cm.opts.CallbackFn(data)
+				jobs <- data
 			} else {
 				break Loop
 			}
 		}
 	}
+	wg.Wait()
+}
+
+// worker spawns simple runtime for concurrent worker pool
+func worker(ctx context.Context, jobs <-chan interface{}, wg *sync.WaitGroup, callbackFn func(interface{}) error) {
+Loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break Loop
+		case data, ok := <-jobs:
+			if ok {
+				callbackFn(data)
+			} else {
+				break Loop
+			}
+		}
+	}
+	wg.Done()
 }
 
 // Add adds a new item to the queue

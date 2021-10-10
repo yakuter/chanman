@@ -28,7 +28,11 @@ func TestChanman(t *testing.T) {
 	go queue.Listen()
 
 	for i := 0; i <= 20; i++ {
-		queue.Add(fmt.Sprintf("job-%d", i))
+		if i < 5 {
+			queue.Add(i)
+		} else {
+			queue.Add(fmt.Sprintf("%d", i))
+		}
 		if i == 10 {
 			queue.Quit()
 		}

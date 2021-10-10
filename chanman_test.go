@@ -18,6 +18,7 @@ func TestChanman(t *testing.T) {
 		CallbackFn: callbackFn,
 		Limit:      19,
 		Worker:     5,
+		DataSize:   8,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

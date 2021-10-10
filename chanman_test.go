@@ -30,7 +30,7 @@ func TestChanman(t *testing.T) {
 
 	for i := 0; i <= 20; i++ {
 		if i < 5 {
-			queue.Add(i)
+			queue.Add(int64(i))
 		} else {
 			queue.Add(fmt.Sprintf("%d", i))
 		}

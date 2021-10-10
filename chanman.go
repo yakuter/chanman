@@ -2,6 +2,7 @@ package chanman
 
 import (
 	"context"
+	"reflect"
 	"sync"
 )
 
@@ -15,6 +16,9 @@ type Options struct {
 	CallbackFn func(interface{}) error
 	// Worker represent how much worker will execute job
 	Worker int
+	// DataSize is the maximum size of the to be given item(data) to add queue.
+	// If DataSize is 0, there is no limit.
+	DataSize uint64
 }
 
 // Chanman is a channel queue manager
@@ -93,7 +97,12 @@ func (cm *Chanman) Add(data interface{}) {
 	}
 
 	if cm.isLimitExceeded() {
-		logger.Errorf("Failed to add %q. Queue limit (%d) exceeded", data, cm.opts.Limit)
+		logger.Errorf("Failed to add item %q. Queue limit (%d) exceeded", data, cm.opts.Limit)
+		return
+	}
+
+	if cm.isDataSizeExceeded(data) {
+		logger.Errorf("Failed to add item %q. Data size (%d) exceeded", data, cm.opts.DataSize)
 		return
 	}
 
@@ -114,7 +123,7 @@ func (cm *Chanman) isLimitExceeded() bool {
 	return cm.count > cm.opts.Limit
 }
 
-// closeCh closes  channel gracefully
+// closeCh closes channel gracefully
 func (cm *Chanman) closeCh() {
 	if !isChClosed(cm.queueCh) {
 		close(cm.queueCh)
@@ -129,4 +138,14 @@ func isChClosed(c chan interface{}) bool {
 	default:
 	}
 	return false
+}
+
+// isDataSizeExceeded returns true if the sent data size greater than DataSize
+func (cm *Chanman) isDataSizeExceeded(data interface{}) bool {
+	// if DataSize is 0, there is no limit
+	if cm.opts.DataSize == 0 {
+		return false
+	}
+	givenDataSize := uint64(reflect.TypeOf(data).Size())
+	return givenDataSize > cm.opts.DataSize
 }

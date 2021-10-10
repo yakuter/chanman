@@ -18,6 +18,7 @@ func TestChanman(t *testing.T) {
 		CallbackFn: callbackFn,
 		Limit:      19,
 		Worker:     5,
+		DataSize:   8,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -28,7 +29,11 @@ func TestChanman(t *testing.T) {
 	go queue.Listen()
 
 	for i := 0; i <= 20; i++ {
-		queue.Add(fmt.Sprintf("job-%d", i))
+		if i < 5 {
+			queue.Add(int64(i))
+		} else {
+			queue.Add(fmt.Sprintf("%d", i))
+		}
 		if i == 10 {
 			queue.Quit()
 		}

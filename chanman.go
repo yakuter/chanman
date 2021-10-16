@@ -8,12 +8,18 @@ import (
 
 var logger Logger = NewBuiltinLogger()
 
+// T means any type of data can be sent to the queue as interface{}
+type T = interface{}
+
+// CallbackFn is the function that will be called when a new item is added to the queue
+type CallbackFn func(T) error
+
 // Chanman is a channel queue manager
 type Options struct {
 	// Limit is the maximum number of items to be queued
 	Limit int
 	// CallbackFn is the function to call when an item is added to the queue
-	CallbackFn func(interface{}) error
+	CallbackFn CallbackFn
 	// Worker represent how much worker will execute job
 	Worker int
 	// DataSize is the maximum size of the to be given item(data) to add queue.
@@ -25,7 +31,7 @@ type Options struct {
 type Chanman struct {
 	ctx     context.Context
 	opts    *Options
-	queueCh chan interface{}
+	queueCh chan T
 	count   int
 	mu      sync.Mutex
 }
@@ -35,7 +41,7 @@ func New(ctx context.Context, options *Options) *Chanman {
 	return &Chanman{
 		ctx:     ctx,
 		opts:    options,
-		queueCh: make(chan interface{}),
+		queueCh: make(chan T),
 	}
 }
 
@@ -43,11 +49,11 @@ func New(ctx context.Context, options *Options) *Chanman {
 func (cm *Chanman) Listen() {
 	defer cm.Quit()
 
-	jobs := make(chan interface{})
+	jobs := make(chan T)
 
 	var wg sync.WaitGroup
 	for i := 0; i < cm.opts.Worker; i++ {
-		go worker(cm.ctx, jobs, &wg, cm.opts.CallbackFn)
+		go worker(cm.ctx, i, jobs, &wg, cm.opts.CallbackFn)
 		wg.Add(1)
 	}
 
@@ -68,7 +74,7 @@ Loop:
 }
 
 // worker spawns simple runtime for concurrent worker pool
-func worker(ctx context.Context, jobs <-chan interface{}, wg *sync.WaitGroup, callbackFn func(interface{}) error) {
+func worker(ctx context.Context, id int, jobs <-chan T, wg *sync.WaitGroup, callbackFn CallbackFn) {
 Loop:
 	for {
 		select {
@@ -76,6 +82,7 @@ Loop:
 			break Loop
 		case data, ok := <-jobs:
 			if ok {
+				logger.Debugf("Worker id:%d job:%v", id, data)
 				callbackFn(data)
 			} else {
 				break Loop
@@ -86,7 +93,7 @@ Loop:
 }
 
 // Add adds a new item to the queue
-func (cm *Chanman) Add(data interface{}) {
+func (cm *Chanman) Add(data T) {
 	cm.mu.Lock()
 	cm.count += 1
 	cm.mu.Unlock()
@@ -131,7 +138,7 @@ func (cm *Chanman) closeCh() {
 }
 
 // isChClosed returns true if a channel is already closed
-func isChClosed(c chan interface{}) bool {
+func isChClosed(c chan T) bool {
 	select {
 	case <-c:
 		return true
@@ -141,7 +148,7 @@ func isChClosed(c chan interface{}) bool {
 }
 
 // isDataSizeExceeded returns true if the sent data size greater than DataSize
-func (cm *Chanman) isDataSizeExceeded(data interface{}) bool {
+func (cm *Chanman) isDataSizeExceeded(data T) bool {
 	// if DataSize is 0, there is no limit
 	if cm.opts.DataSize == 0 {
 		return false

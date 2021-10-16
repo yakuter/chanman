@@ -5,14 +5,16 @@ Channels are widely used as queues. `chanman` (Channel Manager) helps you to eas
 
 ```go
 func main() {
-	callbackFn := func(data interface{}) error {
-		fmt.Printf("Processed data: %v\n", data)
+	var callbackFn chanman.CallbackFn = func(data interface{}) error {
+		t.Logf("callbackFn: %v", data)
 		return nil
 	}
 
 	opts := &chanman.Options{
 		CallbackFn: callbackFn,
 		Limit:      10,
+		Worker:     5,
+		DataSize:   32,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

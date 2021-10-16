@@ -9,16 +9,17 @@ import (
 )
 
 func TestChanman(t *testing.T) {
-	callbackFn := func(data interface{}) error {
-		t.Logf("Processed data: %v", data)
+
+	var callbackFn chanman.CallbackFn = func(data interface{}) error {
+		t.Logf("callbackFn: %v", data)
 		return nil
 	}
 
 	opts := &chanman.Options{
 		CallbackFn: callbackFn,
-		Limit:      19,
-		Worker:     5,
-		DataSize:   8,
+		Limit:      20,
+		Worker:     20,
+		DataSize:   0,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
